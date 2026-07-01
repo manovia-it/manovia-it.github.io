@@ -1,91 +1,34 @@
 // ===== CONFIG =====
 // Замените на URL вашего Google Sheets CSV:
 // Файл → Поделиться → Опубликовать в интернете → CSV → скопировать ссылку
-const DATA_URL = 'assets/clients.csv';
-
-const COLORS = {
-  terra:  '#B0502F',
-  ochre:  '#C9974A',
-  cream:  '#F7F3E8',
-  sienna: '#5E2814'
-};
-
-const MAPLIBRE_JS  = '/assets/maplibre-gl.js';
-const MAPLIBRE_CSS = '/assets/maplibre-gl.css';
-const PAPAPARSE    = '/assets/papaparse.min.js';
-const MAP_STYLE    = 'https://tiles.openfreemap.org/styles/positron';
-
-// Fixed geographic bounds for Italy view (entire country)
-const ITALY_BOUNDS = [[6.5, 36.5], [18.5, 47.2]];
+const DATA_URL     = 'assets/clients.csv';
+const ITALY_BOUNDS = [[36.5, 6.5], [47.2, 18.5]];
+const COLORS       = { terra: '#B0502F', ochre: '#C9974A', cream: '#FBF9F3' };
 
 // ===== STATE =====
-let mapInst      = null;
-let cities       = null;
-let clients      = null;
-let activeLayer  = 'from';
-let featuresFrom = [];
-let featuresTo   = [];
+let mapInst     = null;
+let activeLayer = 'from';
+let groupFrom   = null;
+let groupTo     = null;
 
 const mapEl      = document.getElementById('map');
 const fallbackEl = document.getElementById('map-fallback');
-
-// ===== HELPERS =====
-function loadScript(src) {
-  return new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = src; s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
-  });
-}
-
-function loadCSS(href) {
-  return new Promise(res => {
-    const l = document.createElement('link');
-    l.rel = 'stylesheet'; l.href = href; l.onload = res;
-    document.head.appendChild(l);
-  });
-}
-
 function $id(id) { return document.getElementById(id); }
 
-// ===== PRELOAD — all network requests fire immediately on page load =====
-const libsReady = Promise.all([
-  loadScript(MAPLIBRE_JS),
-  loadCSS(MAPLIBRE_CSS),
-  loadScript(PAPAPARSE)
-]);
-
+// ===== PRELOAD — data fetch starts immediately on page load =====
 const dataReady = Promise.all([
   fetch('assets/cities.json').then(r => r.json()),
   fetch(DATA_URL).then(r => r.text())
 ]);
 
-// Resolves when MapLibre has applied the map style (set in initMap)
-let resolveStyle;
-const styleReady = new Promise(res => { resolveStyle = res; });
-
-// ===== BOOTSTRAP — two parallel tracks: map tiles vs data parsing =====
+// ===== BOOTSTRAP =====
 async function bootstrap() {
   try {
-    // Track 1: start the map as soon as MapLibre is ready — tiles load immediately
-    await libsReady;
-    initMap();
+    const [cities, csvText] = await dataReady;
+    const { data: clients } = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-    // Track 2: parse data (likely already cached/in-flight)
-    const [citiesData, csvText] = await dataReady;
-    cities = citiesData;
-    clients = await new Promise(res => {
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: r => res(r.data)
-      });
-    });
-    updateStats();
-
-    // Add data when whichever is slower (style or data) finishes
-    await styleReady;
-    addDataToMap(mapInst);
+    updateStats(clients);
+    initMap(clients, cities);
   } catch (err) {
     console.error('Map failed to load:', err);
     showFallback();
@@ -93,21 +36,55 @@ async function bootstrap() {
 }
 
 // ===== STATS =====
-function updateStats() {
-  const total   = clients.length;
+function updateStats(clients) {
   const fromSet = new Set(clients.map(r => r.city_from?.trim()).filter(Boolean));
   const uniSet  = new Set(clients.map(r => r.university?.trim()).filter(Boolean));
   const years   = clients.map(r => parseInt(r.year)).filter(n => !isNaN(n));
   const span    = years.length > 1 ? Math.max(...years) - Math.min(...years) + 1 : 1;
 
-  $id('stat-students').textContent = total;
+  $id('stat-students').textContent = clients.length;
   $id('stat-cities').textContent   = fromSet.size;
   $id('stat-unis').textContent     = uniSet.size || '—';
   $id('stat-years').textContent    = span + (span === 1 ? ' год' : span < 5 ? ' года' : ' лет');
 }
 
-// ===== GEOJSON =====
-function buildGeoJSON(field) {
+// ===== MAP INIT =====
+function initMap(clients, cities) {
+  // Start at Italy so Carto tiles for Куда view are already loading
+  const map = L.map('map', {
+    center: [42.5, 12.5],
+    zoom: 6,
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  mapInst = map;
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+    maxZoom: 19,
+    subdomains: 'abcd'
+  }).addTo(map);
+
+  groupFrom = buildGroup(clients, cities, 'city_from', COLORS.terra);
+  groupTo   = buildGroup(clients, cities, 'city_to',   COLORS.ochre);
+
+  $id('map-loading')?.remove();
+  setLayerDesc(activeLayer);
+
+  if (activeLayer === 'to') {
+    groupTo.addTo(map);
+    map.fitBounds(ITALY_BOUNDS, { padding: [32, 32] });
+  } else {
+    groupFrom.addTo(map);
+    if (groupFrom.getLayers().length) {
+      map.fitBounds(groupFrom.getBounds().pad(0.25), { maxZoom: 5 });
+    }
+  }
+}
+
+// ===== CLUSTER GROUP =====
+function buildGroup(clients, cities, field, color) {
   const counts   = {};
   const unknowns = new Set();
 
@@ -122,163 +99,88 @@ function buildGeoJSON(field) {
     console.warn('[map] Cities missing from cities.json:', [...unknowns]);
   }
 
-  return {
-    type: 'FeatureCollection',
-    features: Object.entries(counts).map(([city, count]) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [cities[city][1], cities[city][0]] },
-      properties: { city, count }
-    }))
-  };
-}
-
-// ===== MAP INIT — starts at Italy so Куда tiles preload behind the loading spinner =====
-function initMap() {
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: MAP_STYLE,
-    center: [12.5, 42.5], // Italy center — tiles load while user reads the page
-    zoom: 6,
-    cooperativeGestures: true,
-    attributionControl: { compact: true }
-  });
-
-  mapInst = map;
-  // Keep loading spinner visible; remove it in addDataToMap after view is set
-  map.once('style.load', resolveStyle);
-}
-
-// ===== ADD DATA — called when both style and CSV are ready =====
-function addDataToMap(map) {
-  const fromGJ = buildGeoJSON('city_from');
-  const toGJ   = buildGeoJSON('city_to');
-
-  featuresFrom = fromGJ.features;
-  featuresTo   = toGJ.features;
-
-  addSource(map, 'from', fromGJ);
-  addSource(map, 'to',   toGJ);
-
-  addLayers(map, 'from', COLORS.terra);
-  addLayers(map, 'to',   COLORS.ochre);
-
-  // Sync with current tab state (handles click-before-load race)
-  setVisible(map, 'from', activeLayer === 'from');
-  setVisible(map, 'to',   activeLayer === 'to');
-
-  addInteraction(map, 'from', 'from-dot');
-  addInteraction(map, 'to',   'to-dot');
-  setLayerDesc(activeLayer);
-
-  // Italy tiles already loading since map started there; now fly to correct view
-  $id('map-loading')?.remove();
-  zoomToLayer(map, activeLayer, activeLayer === 'from');
-}
-
-function addSource(map, key, gj) {
-  map.addSource(key, {
-    type: 'geojson',
-    data: gj,
-    cluster: true,
-    clusterMaxZoom: 8,
-    clusterRadius: 52,
-    clusterProperties: { sum: ['+', ['get', 'count']] }
-  });
-}
-
-function addLayers(map, key, color) {
-  map.addLayer({
-    id: `${key}-cluster`,
-    type: 'circle',
-    source: key,
-    filter: ['has', 'point_count'],
-    paint: {
-      'circle-color': color,
-      'circle-opacity': 0.9,
-      'circle-stroke-color': COLORS.cream,
-      'circle-stroke-width': 2.5,
-      'circle-radius': ['step', ['get', 'sum'], 18, 5, 24, 15, 30, 40, 36]
+  const group = L.markerClusterGroup({
+    maxClusterRadius: 52,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    animate: false,
+    iconCreateFunction(cluster) {
+      const sum = cluster.getAllChildMarkers()
+        .reduce((acc, m) => acc + m.options.clientCount, 0);
+      const s = sum < 5 ? 34 : sum < 15 ? 42 : sum < 40 ? 50 : 58;
+      return L.divIcon({
+        html: `<div style="
+          width:${s}px;height:${s}px;
+          background:${color};color:${COLORS.cream};
+          border:2.5px solid ${COLORS.cream};border-radius:50%;
+          display:flex;align-items:center;justify-content:center;
+          font-family:'Onest',sans-serif;font-size:13px;font-weight:600;
+          box-shadow:0 2px 10px rgba(0,0,0,.22);
+        ">${sum}</div>`,
+        className: '',
+        iconSize: [s, s],
+        iconAnchor: [s / 2, s / 2]
+      });
     }
   });
 
-  map.addLayer({
-    id: `${key}-cluster-label`,
-    type: 'symbol',
-    source: key,
-    filter: ['has', 'point_count'],
-    layout: {
-      'text-field': ['get', 'sum'],
-      'text-font': ['Noto Sans Bold', 'Arial Unicode MS Bold'],
-      'text-size': 13,
-      'text-allow-overlap': true
-    },
-    paint: { 'text-color': COLORS.cream }
+  Object.entries(counts).forEach(([city, count]) => {
+    const [lat, lng] = cities[city];
+    const r = count === 1 ? 9 : count < 5 ? 12 : count < 20 ? 16 : 21;
+    const marker = L.circleMarker([lat, lng], {
+      radius: r,
+      fillColor: color,
+      fillOpacity: 0.88,
+      color: COLORS.cream,
+      weight: 2,
+      clientCount: count
+    });
+    marker.bindPopup(
+      `<strong>${city}</strong><br>${count} студент${plural(count)}`,
+      { closeButton: false, offset: L.point(0, -4) }
+    );
+    group.addLayer(marker);
   });
 
-  map.addLayer({
-    id: `${key}-dot`,
-    type: 'circle',
-    source: key,
-    filter: ['!', ['has', 'point_count']],
-    paint: {
-      'circle-color': color,
-      'circle-opacity': 0.88,
-      'circle-stroke-color': COLORS.cream,
-      'circle-stroke-width': 2,
-      'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 8, 5, 14, 20, 22]
+  return group;
+}
+
+// ===== TABS =====
+document.querySelectorAll('[data-map-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.mapTab === activeLayer) return;
+
+    document.querySelectorAll('[data-map-tab]').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    activeLayer = btn.dataset.mapTab;
+    setLayerDesc(activeLayer);
+
+    if (!mapInst) return;
+
+    if (activeLayer === 'to') {
+      if (groupFrom) mapInst.removeLayer(groupFrom);
+      if (groupTo)   groupTo.addTo(mapInst);
+      mapInst.fitBounds(ITALY_BOUNDS, { padding: [32, 32] });
+    } else {
+      if (groupTo)   mapInst.removeLayer(groupTo);
+      if (groupFrom) groupFrom.addTo(mapInst);
+      if (groupFrom?.getLayers().length) {
+        mapInst.fitBounds(groupFrom.getBounds().pad(0.25), { maxZoom: 5 });
+      }
     }
   });
-}
+});
 
-function setVisible(map, key, show) {
-  const v = show ? 'visible' : 'none';
-  [`${key}-cluster`, `${key}-cluster-label`, `${key}-dot`].forEach(id => {
-    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
-  });
-}
-
+// ===== HELPERS =====
 function setLayerDesc(layer) {
   const el = $id('map-layer-desc');
   if (el) el.textContent = layer === 'from'
     ? 'Города, из которых к нам обратились'
     : 'Города итальянских университетов';
-}
-
-// "Куда" → fixed Italy view; "Откуда" → fit to actual data points
-// animated=true on first load, false (instant) on tab switch
-function zoomToLayer(map, layer, animated = false) {
-  const dur = animated ? 700 : 0;
-  if (layer === 'to') {
-    map.fitBounds(ITALY_BOUNDS, { padding: 32, maxZoom: 7, duration: dur, animate: animated });
-  } else if (featuresFrom.length) {
-    fitBounds(map, featuresFrom, dur, animated);
-  }
-}
-
-function addInteraction(map, key, dotLayerId) {
-  map.on('click', dotLayerId, e => {
-    const props = e.features[0].properties;
-    new maplibregl.Popup({ offset: 12, closeButton: false, maxWidth: '200px' })
-      .setLngLat(e.features[0].geometry.coordinates.slice())
-      .setHTML(`<strong>${props.city}</strong><br>${props.count} студент${plural(props.count)}`)
-      .addTo(map);
-  });
-
-  map.on('click', `${key}-cluster`, e => {
-    const f = e.features[0];
-    map.getSource(key).getClusterExpansionZoom(
-      f.properties.cluster_id,
-      (err, zoom) => {
-        if (!err) map.easeTo({ center: f.geometry.coordinates, zoom: zoom + 0.5 });
-      }
-    );
-  });
-
-  const setCursor = cur => () => { map.getCanvas().style.cursor = cur; };
-  map.on('mouseenter', dotLayerId,       setCursor('pointer'));
-  map.on('mouseleave', dotLayerId,       setCursor(''));
-  map.on('mouseenter', `${key}-cluster`, setCursor('pointer'));
-  map.on('mouseleave', `${key}-cluster`, setCursor(''));
 }
 
 function plural(n) {
@@ -287,59 +189,10 @@ function plural(n) {
   return 'ов';
 }
 
-function fitBounds(map, features, duration = 0, animated = false) {
-  const lngs = features.map(f => f.geometry.coordinates[0]);
-  const lats  = features.map(f => f.geometry.coordinates[1]);
-  map.fitBounds(
-    [
-      [Math.min(...lngs) - 4, Math.min(...lats) - 3],
-      [Math.max(...lngs) + 4, Math.max(...lats) + 3]
-    ],
-    { padding: 48, maxZoom: 5, duration, animate: animated }
-  );
-}
-
-// ===== FALLBACK =====
 function showFallback() {
   if (mapEl) mapEl.style.display = 'none';
-  if (fallbackEl) {
-    fallbackEl.style.display = '';
-    if (clients) {
-      const counts = {};
-      clients.forEach(r => {
-        const c = r.city_from?.trim();
-        if (c) counts[c] = (counts[c] || 0) + 1;
-      });
-      const listEl = $id('fallback-list');
-      if (listEl) {
-        listEl.innerHTML = Object.entries(counts)
-          .sort((a, b) => b[1] - a[1])
-          .map(([city, n]) => `<li>${city} — ${n}</li>`)
-          .join('');
-      }
-    }
-  }
+  if (fallbackEl) fallbackEl.style.display = '';
 }
-
-// ===== LAYER TABS =====
-document.querySelectorAll('[data-map-tab]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-map-tab]').forEach(b => {
-      b.classList.remove('active');
-      b.setAttribute('aria-selected', 'false');
-    });
-    btn.classList.add('active');
-    btn.setAttribute('aria-selected', 'true');
-    activeLayer = btn.dataset.mapTab;
-
-    if (mapInst) {
-      setVisible(mapInst, 'from', activeLayer === 'from');
-      setVisible(mapInst, 'to',   activeLayer === 'to');
-      zoomToLayer(mapInst, activeLayer, false); // instant snap, tiles pre-loaded
-      setLayerDesc(activeLayer);
-    }
-  });
-});
 
 // ===== LAZY INIT =====
 const mapObs = new IntersectionObserver(([entry]) => {
