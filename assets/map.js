@@ -10,9 +10,9 @@ const COLORS = {
   sienna: '#5E2814'
 };
 
-const MAPLIBRE_JS  = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
-const MAPLIBRE_CSS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
-const PAPAPARSE    = 'https://unpkg.com/papaparse@5.4.1/papaparse.min.js';
+const MAPLIBRE_JS  = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+const MAPLIBRE_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+const PAPAPARSE    = 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js';
 const MAP_STYLE    = 'https://tiles.openfreemap.org/styles/positron';
 
 // ===== STATE =====
@@ -143,7 +143,9 @@ function initMap() {
     addLayers(map, 'from', COLORS.terra);
     addLayers(map, 'to',   COLORS.ochre);
 
-    setVisible(map, 'to', false);
+    // Sync with current tab state (handles click-before-load race)
+    setVisible(map, 'from', activeLayer === 'from');
+    setVisible(map, 'to',   activeLayer === 'to');
 
     addInteraction(map, 'from', 'from-dot', 'откуда приехал');
     addInteraction(map, 'to',   'to-dot',   'куда поступил');
