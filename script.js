@@ -1,7 +1,7 @@
 // ===== WHATSAPP CONFIG =====
 // Замените номер перед публикацией: формат 39391234567 (без +)
 const WA_PHONE = '393318442104';
-const WA_TEXT = encodeURIComponent('Здравствуйте! Хочу записаться на бесплатную консультацию по поступлению в Италию.');
+const WA_TEXT = encodeURIComponent('Здравствуйте! Хочу записаться на консультацию по поступлению в Италию.');
 const WA_URL = `https://wa.me/${WA_PHONE}?text=${WA_TEXT}`;
 
 document.querySelectorAll('.wa-link').forEach(el => el.setAttribute('href', WA_URL));
