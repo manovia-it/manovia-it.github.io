@@ -171,7 +171,11 @@ function addDataToMap(map) {
   addInteraction(map, 'from', 'from-dot');
   addInteraction(map, 'to',   'to-dot');
   setLayerDesc(activeLayer);
-  zoomToLayer(map, activeLayer);
+
+  // Silently preload Italy tiles: jump there instantly (1 frame, user won't see it),
+  // browser starts fetching Italy tiles in background, then animate to correct view.
+  map.jumpTo({ center: [12.5, 42.5], zoom: 6 });
+  requestAnimationFrame(() => zoomToLayer(map, activeLayer, true));
 }
 
 function addSource(map, key, gj) {
@@ -244,11 +248,13 @@ function setLayerDesc(layer) {
 }
 
 // "Куда" → fixed Italy view; "Откуда" → fit to actual data points
-function zoomToLayer(map, layer) {
+// animated=true on first load, false (instant) on tab switch
+function zoomToLayer(map, layer, animated = false) {
+  const dur = animated ? 700 : 0;
   if (layer === 'to') {
-    map.fitBounds(ITALY_BOUNDS, { padding: 32, maxZoom: 7, duration: 700 });
+    map.fitBounds(ITALY_BOUNDS, { padding: 32, maxZoom: 7, duration: dur, animate: animated });
   } else if (featuresFrom.length) {
-    fitBounds(map, featuresFrom);
+    fitBounds(map, featuresFrom, dur, animated);
   }
 }
 
@@ -284,7 +290,7 @@ function plural(n) {
   return 'ов';
 }
 
-function fitBounds(map, features) {
+function fitBounds(map, features, duration = 0, animated = false) {
   const lngs = features.map(f => f.geometry.coordinates[0]);
   const lats  = features.map(f => f.geometry.coordinates[1]);
   map.fitBounds(
@@ -292,7 +298,7 @@ function fitBounds(map, features) {
       [Math.min(...lngs) - 4, Math.min(...lats) - 3],
       [Math.max(...lngs) + 4, Math.max(...lats) + 3]
     ],
-    { padding: 48, maxZoom: 5, duration: 700 }
+    { padding: 48, maxZoom: 5, duration, animate: animated }
   );
 }
 
@@ -332,7 +338,7 @@ document.querySelectorAll('[data-map-tab]').forEach(btn => {
     if (mapInst) {
       setVisible(mapInst, 'from', activeLayer === 'from');
       setVisible(mapInst, 'to',   activeLayer === 'to');
-      zoomToLayer(mapInst, activeLayer);
+      zoomToLayer(mapInst, activeLayer, false); // instant snap, tiles pre-loaded
       setLayerDesc(activeLayer);
     }
   });
