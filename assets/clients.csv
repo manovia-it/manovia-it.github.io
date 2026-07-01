@@ -1,11 +1,22 @@
-﻿city_from,country_from,city_to,university,year
-Москва,Россия,Milano,Politecnico di Milano,2022
-Москва,Россия,Roma,Sapienza,2023
-Санкт-Петербург,Россия,Bologna,Università di Bologna,2023
-Алматы,Казахстан,Bologna,Università di Bologna,2023
-Алматы,Казахстан,Milano,Politecnico di Milano,2024
-Ташкент,Узбекистан,Torino,Politecnico di Torino,2023
-Минск,Беларусь,Roma,Sapienza,2024
-Киев,Украина,Firenze,Università degli Studi di Firenze,2024
-Баку,Азербайджан,Padova,Università di Padova,2024
-Ереван,Армения,Bologna,Università di Bologna,2025
+city_from,country_from,city_to,university,year
+Ростов-на-Дону,Россия,Roma,Roma Tre,2023
+Ош,Кыргызстан,Parma,Università di Parma,2023
+Ставрополь,Россия,Roma,Sapienza,2023
+Минск,Беларусь,Roma,Roma Tre,2024
+Алматы,Казахстан,Milano,Università IULM,2023
+Астана,Казахстан,Milano,University of Milano-Bicocca,2023
+Москва,Россия,Roma,Roma Tre,2024
+Бишкек,Кыргызстан,Messina,Università degli Studi di Messina,2024
+Астана,Казахстан,Milano,University of Milano-Bicocca,2023
+Минск,Беларусь,Messina,Università degli Studi di Messina,2023
+Екатеринбург,Россия,Torino,Università di Torino,2023
+Минск,Беларусь,Firenze,Università di Firenze,2023
+Бишкек,Кыргызстан,Parma,Università degli Studi di Parma,2023
+Астана,Казахстан,Roma,Sapienza,2023
+Бишкек,Кыргызстан,Napoli,Università degli Studi di Napoli Federico II,2023
+Астана,Казахстан,Milano,University of Milano-Bicocca,2023
+Астана,Казахстан,Milano,University of Milano-Bicocca,2023
+Бишкек,Кыргызстан,Parma,Università degli Studi di Parma,2023
+Астана,Казахстан,Milano,University of Milano-Bicocca,2023
+Астана,Казахстан,Milano,IULM,2023
+Астана,Казахстан,Parma,Università di Parma,2023
