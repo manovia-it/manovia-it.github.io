@@ -15,11 +15,14 @@ const MAPLIBRE_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplib
 const PAPAPARSE    = 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js';
 const MAP_STYLE    = 'https://tiles.openfreemap.org/styles/positron';
 
+// Fixed geographic bounds for Italy view (entire country)
+const ITALY_BOUNDS = [[6.5, 36.5], [18.5, 47.2]];
+
 // ===== STATE =====
-let mapInst     = null;
-let cities      = null;
-let clients     = null;
-let activeLayer = 'from';
+let mapInst      = null;
+let cities       = null;
+let clients      = null;
+let activeLayer  = 'from';
 let featuresFrom = [];
 let featuresTo   = [];
 
@@ -45,7 +48,7 @@ function loadCSS(href) {
 
 function $id(id) { return document.getElementById(id); }
 
-// ===== PRELOAD — starts immediately on page load, before the user scrolls =====
+// ===== PRELOAD — all network requests fire immediately on page load =====
 const libsReady = Promise.all([
   loadScript(MAPLIBRE_JS),
   loadCSS(MAPLIBRE_CSS),
@@ -57,12 +60,19 @@ const dataReady = Promise.all([
   fetch(DATA_URL).then(r => r.text())
 ]);
 
-// ===== BOOTSTRAP — called on intersection, data likely already cached =====
+// Resolves when MapLibre has applied the map style (set in initMap)
+let resolveStyle;
+const styleReady = new Promise(res => { resolveStyle = res; });
+
+// ===== BOOTSTRAP — two parallel tracks: map tiles vs data parsing =====
 async function bootstrap() {
   try {
+    // Track 1: start the map as soon as MapLibre is ready — tiles load immediately
     await libsReady;
-    const [citiesData, csvText] = await dataReady;
+    initMap();
 
+    // Track 2: parse data (likely already cached/in-flight)
+    const [citiesData, csvText] = await dataReady;
     cities = citiesData;
     clients = await new Promise(res => {
       Papa.parse(csvText, {
@@ -71,9 +81,11 @@ async function bootstrap() {
         complete: r => res(r.data)
       });
     });
-
     updateStats();
-    initMap();
+
+    // Add data when whichever is slower (style or data) finishes
+    await styleReady;
+    addDataToMap(mapInst);
   } catch (err) {
     console.error('Map failed to load:', err);
     showFallback();
@@ -82,11 +94,11 @@ async function bootstrap() {
 
 // ===== STATS =====
 function updateStats() {
-  const total    = clients.length;
-  const fromSet  = new Set(clients.map(r => r.city_from?.trim()).filter(Boolean));
-  const uniSet   = new Set(clients.map(r => r.university?.trim()).filter(Boolean));
-  const years    = clients.map(r => parseInt(r.year)).filter(n => !isNaN(n));
-  const span     = years.length > 1 ? Math.max(...years) - Math.min(...years) + 1 : 1;
+  const total   = clients.length;
+  const fromSet = new Set(clients.map(r => r.city_from?.trim()).filter(Boolean));
+  const uniSet  = new Set(clients.map(r => r.university?.trim()).filter(Boolean));
+  const years   = clients.map(r => parseInt(r.year)).filter(n => !isNaN(n));
+  const span    = years.length > 1 ? Math.max(...years) - Math.min(...years) + 1 : 1;
 
   $id('stat-students').textContent = total;
   $id('stat-cities').textContent   = fromSet.size;
@@ -107,23 +119,20 @@ function buildGeoJSON(field) {
   });
 
   if (unknowns.size) {
-    console.warn('[map] Cities missing from cities.json (add coordinates):', [...unknowns]);
+    console.warn('[map] Cities missing from cities.json:', [...unknowns]);
   }
 
   return {
     type: 'FeatureCollection',
     features: Object.entries(counts).map(([city, count]) => ({
       type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [cities[city][1], cities[city][0]]
-      },
+      geometry: { type: 'Point', coordinates: [cities[city][1], cities[city][0]] },
       properties: { city, count }
     }))
   };
 }
 
-// ===== MAP =====
+// ===== MAP INIT — starts tile loading immediately, signals styleReady when done =====
 function initMap() {
   const map = new maplibregl.Map({
     container: 'map',
@@ -137,31 +146,32 @@ function initMap() {
   mapInst = map;
   $id('map-loading')?.remove();
 
-  map.on('style.load', () => {
-    const fromGJ = buildGeoJSON('city_from');
-    const toGJ   = buildGeoJSON('city_to');
+  // Signal that style is ready (resolves styleReady promise)
+  map.once('style.load', resolveStyle);
+}
 
-    featuresFrom = fromGJ.features;
-    featuresTo   = toGJ.features;
+// ===== ADD DATA — called when both style and CSV are ready =====
+function addDataToMap(map) {
+  const fromGJ = buildGeoJSON('city_from');
+  const toGJ   = buildGeoJSON('city_to');
 
-    addSource(map, 'from', fromGJ);
-    addSource(map, 'to',   toGJ);
+  featuresFrom = fromGJ.features;
+  featuresTo   = toGJ.features;
 
-    addLayers(map, 'from', COLORS.terra);
-    addLayers(map, 'to',   COLORS.ochre);
+  addSource(map, 'from', fromGJ);
+  addSource(map, 'to',   toGJ);
 
-    // Sync with current tab state (handles click-before-load race)
-    setVisible(map, 'from', activeLayer === 'from');
-    setVisible(map, 'to',   activeLayer === 'to');
+  addLayers(map, 'from', COLORS.terra);
+  addLayers(map, 'to',   COLORS.ochre);
 
-    addInteraction(map, 'from', 'from-dot');
-    addInteraction(map, 'to',   'to-dot');
-    setLayerDesc(activeLayer);
+  // Sync with current tab state (handles click-before-load race)
+  setVisible(map, 'from', activeLayer === 'from');
+  setVisible(map, 'to',   activeLayer === 'to');
 
-    // Zoom to active layer, not to all points combined
-    const active = activeLayer === 'from' ? featuresFrom : featuresTo;
-    if (active.length) fitBounds(map, active);
-  });
+  addInteraction(map, 'from', 'from-dot');
+  addInteraction(map, 'to',   'to-dot');
+  setLayerDesc(activeLayer);
+  zoomToLayer(map, activeLayer);
 }
 
 function addSource(map, key, gj) {
@@ -171,9 +181,7 @@ function addSource(map, key, gj) {
     cluster: true,
     clusterMaxZoom: 8,
     clusterRadius: 52,
-    clusterProperties: {
-      sum: ['+', ['get', 'count']]
-    }
+    clusterProperties: { sum: ['+', ['get', 'count']] }
   });
 }
 
@@ -188,13 +196,7 @@ function addLayers(map, key, color) {
       'circle-opacity': 0.9,
       'circle-stroke-color': COLORS.cream,
       'circle-stroke-width': 2.5,
-      'circle-radius': [
-        'step', ['get', 'sum'],
-        18,   5,
-        24,  15,
-        30,  40,
-        36
-      ]
+      'circle-radius': ['step', ['get', 'sum'], 18, 5, 24, 15, 30, 40, 36]
     }
   });
 
@@ -222,12 +224,7 @@ function addLayers(map, key, color) {
       'circle-opacity': 0.88,
       'circle-stroke-color': COLORS.cream,
       'circle-stroke-width': 2,
-      'circle-radius': [
-        'interpolate', ['linear'], ['get', 'count'],
-        1,  8,
-        5, 14,
-        20, 22
-      ]
+      'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 8, 5, 14, 20, 22]
     }
   });
 }
@@ -244,6 +241,15 @@ function setLayerDesc(layer) {
   if (el) el.textContent = layer === 'from'
     ? 'Города, из которых к нам обратились'
     : 'Города итальянских университетов';
+}
+
+// "Куда" → fixed Italy view; "Откуда" → fit to actual data points
+function zoomToLayer(map, layer) {
+  if (layer === 'to') {
+    map.fitBounds(ITALY_BOUNDS, { padding: 32, maxZoom: 7, duration: 700 });
+  } else if (featuresFrom.length) {
+    fitBounds(map, featuresFrom);
+  }
 }
 
 function addInteraction(map, key, dotLayerId) {
@@ -281,16 +287,12 @@ function plural(n) {
 function fitBounds(map, features) {
   const lngs = features.map(f => f.geometry.coordinates[0]);
   const lats  = features.map(f => f.geometry.coordinates[1]);
-  const spread = (Math.max(...lngs) - Math.min(...lngs)) + (Math.max(...lats) - Math.min(...lats));
-  // Tight margin for compact region (Italy), wider for CIS spread
-  const margin  = spread < 15 ? 0.5 : 3;
-  const maxZoom = spread < 15 ? 9   : 5;
   map.fitBounds(
     [
-      [Math.min(...lngs) - margin, Math.min(...lats) - margin],
-      [Math.max(...lngs) + margin, Math.max(...lats) + margin]
+      [Math.min(...lngs) - 4, Math.min(...lats) - 3],
+      [Math.max(...lngs) + 4, Math.max(...lats) + 3]
     ],
-    { padding: 64, maxZoom, duration: 700 }
+    { padding: 48, maxZoom: 5, duration: 700 }
   );
 }
 
@@ -330,8 +332,7 @@ document.querySelectorAll('[data-map-tab]').forEach(btn => {
     if (mapInst) {
       setVisible(mapInst, 'from', activeLayer === 'from');
       setVisible(mapInst, 'to',   activeLayer === 'to');
-      const active = activeLayer === 'from' ? featuresFrom : featuresTo;
-      if (active.length) fitBounds(mapInst, active);
+      zoomToLayer(mapInst, activeLayer);
       setLayerDesc(activeLayer);
     }
   });
