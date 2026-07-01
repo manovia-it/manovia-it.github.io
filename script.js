@@ -77,7 +77,7 @@ const heroObserver = new IntersectionObserver(([entry]) => {
   mobileCta.setAttribute('aria-hidden', String(!show));
 }, { threshold: 0 });
 
-heroObserver.observe(hero);
+if (hero) heroObserver.observe(hero);
 
 // ===== FAQ ACCORDION =====
 document.querySelectorAll('.faq__q').forEach(btn => {
