@@ -154,8 +154,9 @@ function initMap() {
     setVisible(map, 'from', activeLayer === 'from');
     setVisible(map, 'to',   activeLayer === 'to');
 
-    addInteraction(map, 'from', 'from-dot', 'откуда приехал');
-    addInteraction(map, 'to',   'to-dot',   'куда поступил');
+    addInteraction(map, 'from', 'from-dot');
+    addInteraction(map, 'to',   'to-dot');
+    setLayerDesc(activeLayer);
 
     // Zoom to active layer, not to all points combined
     const active = activeLayer === 'from' ? featuresFrom : featuresTo;
@@ -238,15 +239,19 @@ function setVisible(map, key, show) {
   });
 }
 
-function addInteraction(map, key, dotLayerId, directionLabel) {
+function setLayerDesc(layer) {
+  const el = $id('map-layer-desc');
+  if (el) el.textContent = layer === 'from'
+    ? 'Города, из которых к нам обратились'
+    : 'Города итальянских университетов';
+}
+
+function addInteraction(map, key, dotLayerId) {
   map.on('click', dotLayerId, e => {
     const props = e.features[0].properties;
     new maplibregl.Popup({ offset: 12, closeButton: false, maxWidth: '200px' })
       .setLngLat(e.features[0].geometry.coordinates.slice())
-      .setHTML(
-        `<strong>${props.city}</strong><br>` +
-        `${props.count} студент${plural(props.count)} — ${directionLabel}`
-      )
+      .setHTML(`<strong>${props.city}</strong><br>${props.count} студент${plural(props.count)}`)
       .addTo(map);
   });
 
@@ -277,12 +282,13 @@ function fitBounds(map, features) {
   const lngs = features.map(f => f.geometry.coordinates[0]);
   const lats  = features.map(f => f.geometry.coordinates[1]);
   const spread = (Math.max(...lngs) - Math.min(...lngs)) + (Math.max(...lats) - Math.min(...lats));
-  // Compact cluster (e.g. Italy only) → allow higher zoom; wide spread (CIS) → cap lower
-  const maxZoom = spread < 20 ? 7 : 5;
+  // Tight margin for compact region (Italy), wider for CIS spread
+  const margin  = spread < 15 ? 0.5 : 3;
+  const maxZoom = spread < 15 ? 9   : 5;
   map.fitBounds(
     [
-      [Math.min(...lngs) - 2, Math.min(...lats) - 2],
-      [Math.max(...lngs) + 2, Math.max(...lats) + 2]
+      [Math.min(...lngs) - margin, Math.min(...lats) - margin],
+      [Math.max(...lngs) + margin, Math.max(...lats) + margin]
     ],
     { padding: 64, maxZoom, duration: 700 }
   );
@@ -326,6 +332,7 @@ document.querySelectorAll('[data-map-tab]').forEach(btn => {
       setVisible(mapInst, 'to',   activeLayer === 'to');
       const active = activeLayer === 'from' ? featuresFrom : featuresTo;
       if (active.length) fitBounds(mapInst, active);
+      setLayerDesc(activeLayer);
     }
   });
 });
