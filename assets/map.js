@@ -16,10 +16,12 @@ const PAPAPARSE    = 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min
 const MAP_STYLE    = 'https://tiles.openfreemap.org/styles/positron';
 
 // ===== STATE =====
-let mapInst    = null;
-let cities     = null;
-let clients    = null;
+let mapInst     = null;
+let cities      = null;
+let clients     = null;
 let activeLayer = 'from';
+let featuresFrom = [];
+let featuresTo   = [];
 
 const mapEl      = document.getElementById('map');
 const fallbackEl = document.getElementById('map-fallback');
@@ -43,28 +45,30 @@ function loadCSS(href) {
 
 function $id(id) { return document.getElementById(id); }
 
-// ===== BOOTSTRAP =====
+// ===== PRELOAD — starts immediately on page load, before the user scrolls =====
+const libsReady = Promise.all([
+  loadScript(MAPLIBRE_JS),
+  loadCSS(MAPLIBRE_CSS),
+  loadScript(PAPAPARSE)
+]);
+
+const dataReady = Promise.all([
+  fetch('assets/cities.json').then(r => r.json()),
+  fetch(DATA_URL).then(r => r.text())
+]);
+
+// ===== BOOTSTRAP — called on intersection, data likely already cached =====
 async function bootstrap() {
   try {
-    await Promise.all([
-      loadScript(MAPLIBRE_JS),
-      loadCSS(MAPLIBRE_CSS),
-      loadScript(PAPAPARSE)
-    ]);
+    await libsReady;
+    const [citiesData, csvText] = await dataReady;
 
-    const [citiesResp, csvResp] = await Promise.all([
-      fetch('assets/cities.json'),
-      fetch(DATA_URL)
-    ]);
-
-    cities = await citiesResp.json();
-    const csvText = await csvResp.text();
-
-    await new Promise(res => {
+    cities = citiesData;
+    clients = await new Promise(res => {
       Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
-        complete: r => { clients = r.data; res(); }
+        complete: r => res(r.data)
       });
     });
 
@@ -133,9 +137,12 @@ function initMap() {
   mapInst = map;
   $id('map-loading')?.remove();
 
-  map.on('load', () => {
+  map.on('style.load', () => {
     const fromGJ = buildGeoJSON('city_from');
     const toGJ   = buildGeoJSON('city_to');
+
+    featuresFrom = fromGJ.features;
+    featuresTo   = toGJ.features;
 
     addSource(map, 'from', fromGJ);
     addSource(map, 'to',   toGJ);
@@ -150,8 +157,9 @@ function initMap() {
     addInteraction(map, 'from', 'from-dot', 'откуда приехал');
     addInteraction(map, 'to',   'to-dot',   'куда поступил');
 
-    const allFeatures = [...fromGJ.features, ...toGJ.features];
-    if (allFeatures.length) fitBounds(map, allFeatures);
+    // Zoom to active layer, not to all points combined
+    const active = activeLayer === 'from' ? featuresFrom : featuresTo;
+    if (active.length) fitBounds(map, active);
   });
 }
 
@@ -268,12 +276,15 @@ function plural(n) {
 function fitBounds(map, features) {
   const lngs = features.map(f => f.geometry.coordinates[0]);
   const lats  = features.map(f => f.geometry.coordinates[1]);
+  const spread = (Math.max(...lngs) - Math.min(...lngs)) + (Math.max(...lats) - Math.min(...lats));
+  // Compact cluster (e.g. Italy only) → allow higher zoom; wide spread (CIS) → cap lower
+  const maxZoom = spread < 20 ? 7 : 5;
   map.fitBounds(
     [
-      [Math.min(...lngs) - 3, Math.min(...lats) - 3],
-      [Math.max(...lngs) + 3, Math.max(...lats) + 3]
+      [Math.min(...lngs) - 2, Math.min(...lats) - 2],
+      [Math.max(...lngs) + 2, Math.max(...lats) + 2]
     ],
-    { padding: 48, maxZoom: 5, duration: 800 }
+    { padding: 64, maxZoom, duration: 700 }
   );
 }
 
@@ -313,6 +324,8 @@ document.querySelectorAll('[data-map-tab]').forEach(btn => {
     if (mapInst) {
       setVisible(mapInst, 'from', activeLayer === 'from');
       setVisible(mapInst, 'to',   activeLayer === 'to');
+      const active = activeLayer === 'from' ? featuresFrom : featuresTo;
+      if (active.length) fitBounds(mapInst, active);
     }
   });
 });
@@ -323,6 +336,6 @@ const mapObs = new IntersectionObserver(([entry]) => {
     mapObs.disconnect();
     bootstrap();
   }
-}, { rootMargin: '300px' });
+}, { rootMargin: '900px' });
 
 if (mapEl) mapObs.observe(mapEl);
