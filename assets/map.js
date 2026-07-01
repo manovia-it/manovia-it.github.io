@@ -132,21 +132,19 @@ function buildGeoJSON(field) {
   };
 }
 
-// ===== MAP INIT — starts tile loading immediately, signals styleReady when done =====
+// ===== MAP INIT — starts at Italy so Куда tiles preload behind the loading spinner =====
 function initMap() {
   const map = new maplibregl.Map({
     container: 'map',
     style: MAP_STYLE,
-    center: [42, 47],
-    zoom: 2.2,
+    center: [12.5, 42.5], // Italy center — tiles load while user reads the page
+    zoom: 6,
     cooperativeGestures: true,
     attributionControl: { compact: true }
   });
 
   mapInst = map;
-  $id('map-loading')?.remove();
-
-  // Signal that style is ready (resolves styleReady promise)
+  // Keep loading spinner visible; remove it in addDataToMap after view is set
   map.once('style.load', resolveStyle);
 }
 
@@ -172,10 +170,9 @@ function addDataToMap(map) {
   addInteraction(map, 'to',   'to-dot');
   setLayerDesc(activeLayer);
 
-  // Silently preload Italy tiles: jump there instantly (1 frame, user won't see it),
-  // browser starts fetching Italy tiles in background, then animate to correct view.
-  map.jumpTo({ center: [12.5, 42.5], zoom: 6 });
-  requestAnimationFrame(() => zoomToLayer(map, activeLayer, true));
+  // Italy tiles already loading since map started there; now fly to correct view
+  $id('map-loading')?.remove();
+  zoomToLayer(map, activeLayer, activeLayer === 'from');
 }
 
 function addSource(map, key, gj) {
