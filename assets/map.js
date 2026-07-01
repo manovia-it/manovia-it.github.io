@@ -10,9 +10,9 @@ const COLORS = {
   sienna: '#5E2814'
 };
 
-const MAPLIBRE_JS  = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js';
-const MAPLIBRE_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css';
-const PAPAPARSE    = 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js';
+const MAPLIBRE_JS  = '/assets/maplibre-gl.js';
+const MAPLIBRE_CSS = '/assets/maplibre-gl.css';
+const PAPAPARSE    = '/assets/papaparse.min.js';
 const MAP_STYLE    = 'https://tiles.openfreemap.org/styles/positron';
 
 // Fixed geographic bounds for Italy view (entire country)
