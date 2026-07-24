@@ -1,7 +1,7 @@
 // ===== WHATSAPP CONFIG =====
 // Замените номер перед публикацией: формат 39391234567 (без +)
 const WA_PHONE = '393318442104';
-const WA_TEXT = encodeURIComponent('Здравствуйте! Хочу записаться на консультацию по поступлению в Италию.');
+const WA_TEXT = encodeURIComponent('Здравствуйте. Хочу подать заявку на аудит профиля.');
 const WA_URL = `https://wa.me/${WA_PHONE}?text=${WA_TEXT}`;
 
 document.querySelectorAll('.wa-link').forEach(el => el.setAttribute('href', WA_URL));
@@ -23,14 +23,6 @@ document.querySelectorAll('[data-stagger]').forEach(group => {
 });
 
 document.querySelectorAll('[data-reveal]').forEach(el => revealObs.observe(el));
-
-// ===== PARALLAX ON HERO EMBLEM =====
-const heroVisual = document.querySelector('.hero__visual-inner');
-window.addEventListener('scroll', () => {
-  if (heroVisual && window.scrollY < window.innerHeight * 1.5) {
-    heroVisual.style.transform = `translateY(${window.scrollY * 0.12}px)`;
-  }
-}, { passive: true });
 
 // ===== HEADER SHADOW ON SCROLL =====
 const header = document.getElementById('header');

@@ -11,7 +11,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Archivo:wght@700;800;900&family=Piazzolla:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 
   <style>
@@ -19,88 +19,62 @@
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
-      background: linear-gradient(160deg, #B0502F 0%, #9A3F22 100%);
-      position: relative;
-      overflow: hidden;
+      background: var(--ink);
     }
 
-    .error-wrap::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      opacity: .05;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-      mix-blend-mode: overlay;
-    }
-
-    /* Header on terra bg */
     .error-wrap .header {
-      background: transparent;
-      border-bottom: 1px solid rgba(247,243,232,.12);
+      background: var(--ink);
+      border-bottom: 1px solid var(--rule-on-ink);
     }
-    .error-wrap .header__logo-svg { color: var(--cream); }
-    .error-wrap .header__logo-text { color: var(--cream); }
-    .error-wrap .header__nav-link { color: rgba(247,243,232,.75); }
-    .error-wrap .header__nav-link:hover { background: rgba(247,243,232,.1); color: var(--cream); }
-    .error-wrap .header.scrolled { background: rgba(94,40,20,.85); }
-
-    /* Burger lines on light bg */
-    .error-wrap .header__burger span { background: var(--cream); }
+    .error-wrap .header__logo-svg,
+    .error-wrap .header__logo-text { color: var(--paper); }
+    .error-wrap .header__nav-link { color: var(--paper); }
+    .error-wrap .header__nav-link:hover { color: var(--terra); }
+    .error-wrap .header__burger span { background: var(--paper); }
 
     .error-main {
       flex: 1;
       display: flex;
       align-items: center;
       padding-block: clamp(64px, 12vw, 120px);
-      position: relative;
-      z-index: 1;
-    }
-
-    .error-watermark {
-      position: absolute;
-      right: -6%;
-      top: 50%;
-      transform: translateY(-50%);
-      width: clamp(240px, 44vw, 560px);
-      pointer-events: none;
-      opacity: .06;
     }
 
     .error-eyebrow {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-style: italic;
-      font-size: 18px;
-      color: rgba(247,243,232,.7);
+      font-family: var(--font-body);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--stone-on-ink);
       display: block;
       margin-bottom: 16px;
     }
 
     .error-num {
-      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-family: var(--font-serif);
       font-weight: 600;
-      font-size: clamp(100px, 18vw, 180px);
-      line-height: 1;
-      color: var(--cream);
-      opacity: .18;
-      letter-spacing: -0.02em;
-      margin-bottom: -0.1em;
+      font-size: clamp(100px, 20vw, 220px);
+      line-height: .9;
+      color: var(--terra);
+      letter-spacing: -0.01em;
+      margin-bottom: 24px;
     }
 
     .error-h1 {
-      font-family: 'Onest', sans-serif;
+      font-family: var(--font-display);
       font-weight: 800;
-      font-size: clamp(28px, 5vw, 52px);
+      font-size: clamp(28px, 4.5vw, 44px);
       line-height: 1.1;
       letter-spacing: -0.02em;
-      color: var(--cream);
+      color: var(--paper);
       margin-bottom: 16px;
     }
 
     .error-text {
+      font-family: var(--font-body);
       font-size: 17px;
-      line-height: 1.65;
-      color: rgba(247,243,232,.75);
+      line-height: 1.6;
+      color: var(--stone-on-ink);
       max-width: 44ch;
       margin-bottom: 40px;
     }
@@ -109,16 +83,6 @@
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-    }
-
-    .btn--ghost {
-      background: transparent;
-      color: var(--cream);
-      border: 1.5px solid rgba(247,243,232,.4);
-    }
-    .btn--ghost:hover {
-      background: rgba(247,243,232,.08);
-      border-color: rgba(247,243,232,.7);
     }
   </style>
 </head>
@@ -139,7 +103,7 @@
   <header class="header" id="header">
     <div class="container header__inner">
       <a href="/" class="header__logo" aria-label="MANÓVIA — главная">
-        <svg class="header__logo-svg" width="36" height="36" aria-hidden="true">
+        <svg class="header__logo-svg" width="30" height="30" aria-hidden="true">
           <use href="#logo2"/>
         </svg>
         <span class="header__logo-text">MANÓVIA</span>
@@ -154,8 +118,8 @@
         <a href="/map" class="header__nav-link">Карта</a>
       </nav>
 
-      <a href="#" class="btn btn--ochre header__cta wa-link" target="_blank" rel="noopener">
-        Записаться на консультацию
+      <a href="#" class="btn btn--primary header__cta wa-link" target="_blank" rel="noopener">
+        Аудит профиля
       </a>
 
       <button class="header__burger" id="burger" aria-label="Открыть меню" aria-expanded="false" aria-controls="mobile-nav">
@@ -171,27 +135,21 @@
     <a href="/#why" class="mobile-nav__link">Почему мы</a>
     <a href="/#faq" class="mobile-nav__link">FAQ</a>
     <a href="/map" class="mobile-nav__link">Карта</a>
-    <a href="#" class="btn btn--ochre wa-link mobile-nav__cta" target="_blank" rel="noopener">
-      Записаться на консультацию
+    <a href="#" class="btn btn--primary wa-link mobile-nav__cta" target="_blank" rel="noopener">
+      Подать заявку на аудит профиля
     </a>
   </div>
 
   <!-- ===== MAIN ===== -->
   <main class="error-main">
-    <div class="error-watermark" aria-hidden="true">
-      <svg viewBox="0 0 822 822" width="100%" xmlns="http://www.w3.org/2000/svg" style="color:#F7F3E8">
-        <use href="#logo2"/>
-      </svg>
-    </div>
-
     <div class="container">
       <span class="error-eyebrow">Ошибка 404</span>
       <div class="error-num" aria-hidden="true">404</div>
-      <h1 class="error-h1">Страница не найдена</h1>
-      <p class="error-text">Кажется, такой страницы не существует. Возможно, она была перемещена или адрес введён с опечаткой.</p>
+      <h1 class="error-h1">Такой страницы нет</h1>
+      <p class="error-text">Адрес введён с опечаткой, или страница была перемещена. Бюрократия — не только у итальянских вузов.</p>
       <div class="error-actions">
-        <a href="/" class="btn btn--ochre">← На главную</a>
-        <a href="#" class="btn btn--ghost wa-link" target="_blank" rel="noopener">Написать в WhatsApp</a>
+        <a href="/" class="btn btn--primary">← На главную</a>
+        <a href="#" class="btn btn--outline-paper wa-link" target="_blank" rel="noopener">Написать в WhatsApp</a>
       </div>
     </div>
   </main>
