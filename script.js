@@ -71,30 +71,6 @@ const heroObserver = new IntersectionObserver(([entry]) => {
 
 if (hero) heroObserver.observe(hero);
 
-// Firefox for Android (and some other mobile browsers) can mis-position
-// `position: fixed; bottom: 0` elements while the dynamic address-bar
-// toolbar is animating in/out during scroll, leaving the bar stranded at
-// a stale offset instead of the true bottom of the visible viewport.
-// The VisualViewport API reports the actual visible area, so we use it
-// to correct the offset directly instead of trusting fixed positioning.
-if (window.visualViewport) {
-  const vv = window.visualViewport;
-  let ticking = false;
-  const syncCtaOffset = () => {
-    ticking = false;
-    const hidden = window.innerHeight - (vv.height + vv.offsetTop);
-    mobileCta.style.bottom = `${Math.max(0, hidden)}px`;
-  };
-  const requestSync = () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(syncCtaOffset);
-  };
-  vv.addEventListener('resize', requestSync);
-  vv.addEventListener('scroll', requestSync);
-  syncCtaOffset();
-}
-
 // ===== FAQ ACCORDION =====
 document.querySelectorAll('.faq__q').forEach(btn => {
   btn.addEventListener('click', () => {
